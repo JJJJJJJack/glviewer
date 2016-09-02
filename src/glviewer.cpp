@@ -32,6 +32,8 @@ using namespace std;
 struct timeval tvstart;
 struct timeval tvend;
 
+const char* FONT_FILE_PATH =  "/home/darc/catkin_ws/src/glviewer/font/arial.ttf";
+
 double roll, yaw, pitch;
 
 double gametime=0;
@@ -593,7 +595,7 @@ void renderScene(void) {
 	}
 	if(vehicle_collision==true)
 		score=0;
-	FTGLPixmapFont font("/home/darc/catkin_ws/src/glviewer/font/arial.ttf");
+	FTGLPixmapFont font(FONT_FILE_PATH);
 	FTPoint position_label_x(window_width-260.0f,window_height-40.0f,0.0f);
 	font.FaceSize(13);
 	char tempchar[10];
