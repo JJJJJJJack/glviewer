@@ -32,7 +32,7 @@ using namespace std;
 struct timeval tvstart;
 struct timeval tvend;
 
-const char* FONT_FILE_PATH =  "/home/darc/catkin_ws/src/glviewer/font/arial.ttf";
+string FONT_FILE_PATH =  "/home/USERNAME/catkin_ws/src/glviewer/font/arial.ttf";
 
 double roll, yaw, pitch;
 
@@ -594,8 +594,8 @@ void renderScene(void) {
 			score+=-1000;
 	}
 	if(vehicle_collision==true)
-		score=0;
-	FTGLPixmapFont font(FONT_FILE_PATH);
+	  score=0;
+	FTGLPixmapFont font(FONT_FILE_PATH.c_str());
 	FTPoint position_label_x(window_width-260.0f,window_height-40.0f,0.0f);
 	font.FaceSize(13);
 	char tempchar[10];
@@ -610,7 +610,7 @@ void renderScene(void) {
 	}else{
 		const char *positiontext_x="Score:";
 		font.Render(positiontext_x,6,position_text_x);
-	}
+		}
 //Text time
 	FTPoint position_label_time(window_width-260.0f,window_height-55.0f,0.0f);
 	font.FaceSize(13);
@@ -618,7 +618,7 @@ void renderScene(void) {
 	sprintf(timechar,"%f",avgtime*1000);
 	const char *label_time=timechar;
 	font.Render(label_time,8,position_label_time);
-
+	
 	FTPoint position_text_time(window_width-330.0f,window_height-55.0f,0.0f);
 	const char *timetext_x="Time:";
 	font.Render(timetext_x,5,position_text_time);
@@ -763,7 +763,13 @@ int main(int argc, char **argv)
 	ros::Subscriber sub_position = x_handle.subscribe("/crazyflie/pose", 1000, x_position_Callback);
 	ros::Subscriber sub_goal = x_handle.subscribe("/crazyflie/goal", 1000, x_goal_Callback);
 
-//initial vehicle
+        char* username;
+	username = (char *)malloc(4*sizeof(char));
+	cuserid(username);
+        string USERNAME(username);
+	FONT_FILE_PATH.replace(6,8,USERNAME);
+
+//Initial vehicle
 	vehicle_position_x=10.0;vehicle_position_y=0.0;vehicle_direction=rand()/(double)(RAND_MAX/6.282)-3.141;
 //initial obstacle
 	obstacle_position_x[0]=5; obstacle_position_x[1]=0; obstacle_position_x[2]=-5; obstacle_position_x[3]=0;
