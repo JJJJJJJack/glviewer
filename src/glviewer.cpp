@@ -17,7 +17,6 @@
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include <sensor_msgs/Imu.h>
-#include <px_comm/OpticalFlow.h>
 #include "geometry_msgs/PoseStamped.h"
 #include <tf/transform_listener.h>
 #include <nav_msgs/Odometry.h>
@@ -56,8 +55,6 @@ int window_width=640, window_height=360;
 int move_record=0;
 int goal_move_record=0;
 
-px_comm::OpticalFlow local_optical_data;
-
 nav_msgs::Odometry x_sub_CurrPose;
 
 geometry_msgs::PoseStamped x_sub_GoalPose;
@@ -65,8 +62,6 @@ geometry_msgs::PoseStamped x_sub_GoalPose;
 void x_position_Callback(const nav_msgs::Odometry& CurrPose)
 {
   x_sub_CurrPose = CurrPose;
-  
-  local_optical_data.state_style = NAV_USING_GROUND_TILE;
   
   vehicle_position_x = 10.0f - x_sub_CurrPose.pose.pose.position.x;
   vehicle_position_y = x_sub_CurrPose.pose.pose.position.z;
@@ -76,7 +71,7 @@ void x_position_Callback(const nav_msgs::Odometry& CurrPose)
     position_record_x[move_record/2] = vehicle_position_x;
     position_record_y[move_record/2] = vehicle_position_y;
     position_record_z[move_record/2] = vehicle_position_z;
-    position_record_state[move_record/2] = local_optical_data.state_style;
+    position_record_state[move_record/2] = NAV_USING_GROUND_TILE;
   }
   if(move_record++/2 >= 20000)
     move_record = 0;
@@ -86,12 +81,9 @@ void x_position_Callback(const nav_msgs::Odometry& CurrPose)
   tfScalar curr_yaw, curr_pitch, curr_roll;
   tf::Matrix3x3(orientation).getEulerYPR(curr_yaw, curr_pitch, curr_roll);
 
-  local_optical_data.pitch = curr_pitch;
-  local_optical_data.yaw = curr_yaw;
-  local_optical_data.roll  = curr_roll;
-  pitch = local_optical_data.pitch;
-  yaw = -local_optical_data.yaw;
-  roll = -local_optical_data.roll;
+  pitch = curr_pitch;
+  yaw = -curr_yaw;
+  roll = -curr_roll;
 
 	convertMat[0][0]=cos(pitch)*cos(yaw);
 	convertMat[1][0]=cos(pitch)*sin(yaw);
@@ -107,8 +99,6 @@ void x_position_Callback(const nav_msgs::Odometry& CurrPose)
 void x_goal_Callback(const geometry_msgs::PoseStamped& CurrPose)
 {
   x_sub_GoalPose = CurrPose;
-  
-  local_optical_data.state_style = NAV_USING_GROUND_TILE;
   
   goal_position_x = 10.0f - x_sub_GoalPose.pose.position.x;
   goal_position_y = x_sub_GoalPose.pose.position.z;
