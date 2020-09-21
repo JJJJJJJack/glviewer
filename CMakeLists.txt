@@ -30,6 +30,9 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   message_generation
+  tf
+  tf_conversions
+  eigen_conversions
 )
 
 FIND_PACKAGE(OpenGL REQUIRED)
@@ -43,6 +46,7 @@ catkin_package(
 
 
 include_directories(
+  include
   ${catkin_INCLUDE_DIRS}
   ${OPENGL_INCLUDE_DIR}
   ${GLUT_INCLUDE_DIR}
@@ -52,10 +56,10 @@ include_directories(
 
 SET(FTGL_LIBRARY /usr/lib/x86_64-linux-gnu/libftgl.so)
 
- add_executable(glviewer 
-                  src/glviewer.cpp
-                  src/include/transformation2.cpp)
- target_link_libraries(glviewer 
+add_executable(glviewer 
+  src/glviewer.cpp)
+
+target_link_libraries(glviewer 
   ${catkin_LIBRARIES}
   ${OPENGL_LIBRARIES}
   ${GLUT_glut_LIBRARY}
