@@ -25,12 +25,15 @@
 #define NAV_USING_GROUND_TILE          33
 #define NAV_USING_SLAM                 34
 #define NAV_USING_OPTICAL_FLOW         35
+#define VEHICLE_SCALE(_scale)  (vehicle_scale * _scale)
 
 typedef enum VEHICLE_TYPE_ENUM {
   VEHICLE_QUAD,
   VEHICLE_BI_UP,
   VEHICLE_BI_DOWN,
 } VEHICLE_TYPE;
+
+
 
 
 using namespace std;
@@ -42,10 +45,11 @@ struct timeval tvend;
 int vehicle_type = VEHICLE_BI_UP;
 
 // Vehicle property in meters
-const float vehicle_propeller_radius = 0.03;
-const float vehicle_bi_arm_length = 0.12;
-const float vehicle_bi_servo_length = 0.04;
-const float vehicle_bi_motoro_length = 0.02;
+const float vehicle_scale = 4.0f;
+const float vehicle_propeller_radius = VEHICLE_SCALE(0.03);
+const float vehicle_bi_arm_length = VEHICLE_SCALE(0.12);
+const float vehicle_bi_servo_length = VEHICLE_SCALE(0.04);
+const float vehicle_bi_motoro_length = VEHICLE_SCALE(0.02);
 
 string FONT_FILE_PATH =  "/home/USERNAME/catkin_ws/src/glviewer/font/arial.ttf";
 
@@ -398,7 +402,8 @@ Vector3d offsetCenter(Vector3d offset, Quaterniond quat)
   Quaterniond Rtemp(0,0,0.707,0.707);
   quat = Rtemp * quat * Rtemp;
   Vector3d output;
-  output = quat * Vector3d(-offset.x(), offset.z(), -offset.y());
+  output = quat * Vector3d(-offset.x(), -offset.z(), -offset.y());
+  output.y() = -output.y();
   return output;
 }
 
@@ -581,31 +586,31 @@ void renderScene(void) {
       {
 	//Body horizontal bar
 	glColor3f(GLCOLOR_BLUE);
-	drawRectangle3D(COG, Vector3d(0.03, 2*vehicle_bi_arm_length, 0.02), R_BW);
+	drawRectangle3D(COG, Vector3d(VEHICLE_SCALE(0.03), 2*vehicle_bi_arm_length, VEHICLE_SCALE(0.02)), R_BW);
 	//Body block
 	glColor3f(GLCOLOR_DEEPPINK1X);
-	Vector3d vehicle_bi_body_offset = offsetCenter(Vector3d(0.02, 0.0, 0.02), R_BW);
-	drawRectangle3D(COG + vehicle_bi_body_offset, Vector3d(0.06, 0.05, 0.05), R_BW);
+	Vector3d vehicle_bi_body_offset = offsetCenter(Vector3d(VEHICLE_SCALE(0.06), VEHICLE_SCALE(0.0), VEHICLE_SCALE(0.03)), R_BW);
+	drawRectangle3D(COG + vehicle_bi_body_offset, Vector3d(VEHICLE_SCALE(0.09), VEHICLE_SCALE(0.05), VEHICLE_SCALE(0.06)), R_BW);
 	//Servo left
 	glColor3f(GLCOLOR_SPRINGGREEN1);
-	Vector3d vehicle_servo_left_offset = offsetCenter(Vector3d(0,-vehicle_bi_arm_length,0.02), R_BW);
-	drawRectangle3D(COG + vehicle_servo_left_offset, Vector3d(0.02, 0.04, 0.05), R_BW);
+	Vector3d vehicle_servo_left_offset = offsetCenter(Vector3d(VEHICLE_SCALE(0),-vehicle_bi_arm_length,VEHICLE_SCALE(0.02)), R_BW);
+	drawRectangle3D(COG + vehicle_servo_left_offset, Vector3d(VEHICLE_SCALE(0.02), VEHICLE_SCALE(0.04), VEHICLE_SCALE(0.05)), R_BW);
 	//Servo right
-	Vector3d vehicle_servo_right_offset = offsetCenter(Vector3d(0,vehicle_bi_arm_length,0.02), R_BW);
-	drawRectangle3D(COG + vehicle_servo_right_offset, Vector3d(0.02, 0.04, 0.05), R_BW);
+	Vector3d vehicle_servo_right_offset = offsetCenter(Vector3d(VEHICLE_SCALE(0),vehicle_bi_arm_length,VEHICLE_SCALE(0.02)), R_BW);
+	  drawRectangle3D(COG + vehicle_servo_right_offset, Vector3d(VEHICLE_SCALE(0.02), VEHICLE_SCALE(0.04), VEHICLE_SCALE(0.05)), R_BW);
 	//Rotor Left
 	glColor3f(GLCOLOR_RED3);
-	Vector3d vehicle_rotor_left_bottom = COG + offsetCenter(Vector3d(0,-vehicle_bi_arm_length,0.05), R_BW);
+	Vector3d vehicle_rotor_left_bottom = COG + offsetCenter(Vector3d(VEHICLE_SCALE(0),-vehicle_bi_arm_length,VEHICLE_SCALE(0.05)), R_BW);
 	//FIXME change R_BW here to have additional servo rotation
-	Vector3d vehicle_rotor_left_top = COG + offsetCenter(R_LSB*Vector3d(0,-vehicle_bi_arm_length,0.08), R_BW);
+	Vector3d vehicle_rotor_left_top = COG + offsetCenter(R_LSB*Vector3d(VEHICLE_SCALE(0),-vehicle_bi_arm_length,VEHICLE_SCALE(0.08)), R_BW);
 	drawCylinder(vehicle_rotor_left_bottom.x(), vehicle_rotor_left_bottom.y(), vehicle_rotor_left_bottom.z(),
-		     vehicle_rotor_left_top.x(),    vehicle_rotor_left_top.y(),    vehicle_rotor_left_top.z(), 0.03);
+		     vehicle_rotor_left_top.x(),    vehicle_rotor_left_top.y(),    vehicle_rotor_left_top.z(), vehicle_propeller_radius);
 	//Rotor Right
-	Vector3d vehicle_rotor_right_bottom = COG + offsetCenter(Vector3d(0,vehicle_bi_arm_length,0.05), R_BW);
+	Vector3d vehicle_rotor_right_bottom = COG + offsetCenter(Vector3d(VEHICLE_SCALE(0),vehicle_bi_arm_length,VEHICLE_SCALE(0.05)), R_BW);
 	//FIXME change R_BW here to have additional servo rotation
-	Vector3d vehicle_rotor_right_top = COG + offsetCenter(R_RSB*Vector3d(0,vehicle_bi_arm_length,0.08), R_BW);
+	Vector3d vehicle_rotor_right_top = COG + offsetCenter(R_RSB*Vector3d(VEHICLE_SCALE(0),vehicle_bi_arm_length,VEHICLE_SCALE(0.08)), R_BW);
 	drawCylinder(vehicle_rotor_right_bottom.x(), vehicle_rotor_right_bottom.y(), vehicle_rotor_right_bottom.z(),
-		     vehicle_rotor_right_top.x(),    vehicle_rotor_right_top.y(),    vehicle_rotor_right_top.z(), 0.03);
+	vehicle_rotor_right_top.x(),    vehicle_rotor_right_top.y(),    vehicle_rotor_right_top.z(), vehicle_propeller_radius);
 	//Shadow
 	glColor3f(0.5f, 0.0f, 0.2f);
 	glLineWidth(2);
@@ -811,7 +816,9 @@ int main(int argc, char **argv)
   glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
   glutInitWindowPosition(100,100);
   glutInitWindowSize(640,360);
-  glutCreateWindow("DARCFlie Realtime Visualization");
+  glutCreateWindow("Rotorcraft Realtime Visualization and Playback");
+
+  glEnable(GL_DEPTH_TEST);
 
   glutIgnoreKeyRepeat(1);
   glutKeyboardFunc(pressKey);
