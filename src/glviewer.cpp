@@ -60,7 +60,7 @@ float position_record_x[20000], position_record_y[20000], position_record_z[2000
 int position_record_state[20000];
 float goal_record_x[20000], goal_record_y[20000], goal_record_z[20000];
 int goal_record_state[20000];
-float angle=-1.5775,deltaAngle = 0.0,ratio;
+float angle=-1.5775,deltaAngle = 0.0;
 float x=11.0f,y=0.5f,z=0.0f;
 float lx_FrontBack=-1.0f,ly=-70.0f,lx=70.0f,lz=70.0f,lz_FrontBack=0.0f,lx_LeftRight=0.0f,lz_LeftRight=-1.0f,lx_UpDown=0.0f,ly_UpDown=0.0f,lz_UpDown=-1.0f;
 GLint snowman_display_list;
@@ -149,7 +149,7 @@ void changeSize(int w, int h){
   // (you cant make a window of zero width).
   if(h == 0)
     h = 1;
-  ratio = 1.0f * w / h;
+  float ratio = 1.0f * w / h;
   // Reset the coordinate system before modifying
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
