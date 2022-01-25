@@ -28,6 +28,7 @@
 #define VEHICLE_SCALE(_scale)  (vehicle_scale * _scale)
 
 typedef enum VEHICLE_TYPE_ENUM {
+  VEHICLE_BALL,
   VEHICLE_QUAD,
   VEHICLE_BI_UP,
   VEHICLE_BI_DOWN,
@@ -42,7 +43,8 @@ using namespace Eigen;
 struct timeval tvstart;
 struct timeval tvend;
 
-int vehicle_type = VEHICLE_BI_UP;
+VEHICLE_TYPE vehicle_type = VEHICLE_QUAD;
+VEHICLE_TYPE vehicle_goal_type = VEHICLE_QUAD;
 
 // Vehicle property in meters
 const float vehicle_scale = 4.0f;
@@ -75,9 +77,10 @@ int goal_move_record=0;
  W : world frame
  LS: left servo frame
  RS: right servo frame
+ GO: goal frame
 ***************************/
-Quaterniond R_BW(1,0,0,0), R_LSB, R_RSB, R_WGL(0,0,1,0);
-Vector3d COG;
+Quaterniond R_BW(1,0,0,0), R_GOW(1,0,0,0), R_LSB, R_RSB, R_WGL(0,0,1,0);
+Vector3d COG, COG_GOAL;
 
 nav_msgs::Odometry x_sub_CurrPose;
 
@@ -116,7 +119,9 @@ void x_goal_Callback(const geometry_msgs::PoseStamped& CurrPose)
   
   goal_position_x = 10.0f - x_sub_GoalPose.pose.position.x;
   goal_position_y = x_sub_GoalPose.pose.position.z;
-  goal_position_z = x_sub_GoalPose.pose.position.y;
+  goal_position_z = -x_sub_GoalPose.pose.position.y;
+
+  COG_GOAL << goal_position_x, goal_position_y, goal_position_z;
 
   if(goal_move_record % 5 == 0){
     goal_record_x[goal_move_record/2] = goal_position_x;
@@ -126,6 +131,11 @@ void x_goal_Callback(const geometry_msgs::PoseStamped& CurrPose)
   }
   if(goal_move_record++/5 >= 20000)
     goal_move_record = 0;
+  tf::Quaternion orientation;
+  tf::quaternionMsgToTF(x_sub_GoalPose.pose.orientation, orientation);
+  tf::quaternionTFToEigen(orientation, R_GOW);
+  // from convert to openGL frame
+  R_GOW = R_WGL * R_GOW * R_WGL;
 }
 
 void left_angle_Callback(const geometry_msgs::Quaternion& msg)
@@ -140,6 +150,14 @@ void right_angle_Callback(const geometry_msgs::Quaternion& msg)
   vehicle_bi_right_angle_msg = msg;
   tf::quaternionMsgToEigen(vehicle_bi_right_angle_msg, R_RSB);
   //R_RSB = R_RSB.conjugate();
+}
+
+Eigen::Vector3d local2Global(float x,float y,float z, Quaterniond R_LW)
+{
+  Eigen::Vector3d vector;
+  Vector3d from(x,y,z);
+  vector = R_LW*from;
+  return vector;
 }
 
 void changeSize(int w, int h){
@@ -297,6 +315,110 @@ void drawRectangle3D(Vector3d cog, Vector3d width, Quaterniond quat){
     glVertex3f(cog.x()+R_vet.x(), cog.y()-R_vet.y(), cog.z()+R_vet.z());
     glEnd();
   }
+}
+
+void drawVehicleQuad(Vector3d cog, Quaterniond Rot){
+  double cog_x=cog(0), cog_y=cog(1), cog_z=cog(2);
+  //Prop-guard circle
+  glColor3f(0.8f, 0.95f, 0.8f);
+  for(int i=0;i<4;i++)
+    {
+      Eigen::Vector3d v=local2Global(VEHICLE_SCALE(0.05303)*cos(0.7854+i*1.5708),VEHICLE_SCALE(0.05303)*sin(0.7854+i*1.5708),VEHICLE_SCALE(-0.0125), Rot);
+      Eigen::Vector3d vv=local2Global(VEHICLE_SCALE(0.05303)*cos(0.7854+i*1.5708),VEHICLE_SCALE(0.05303)*sin(0.7854+i*1.5708),VEHICLE_SCALE(-0.01375), Rot);
+      drawCylinder(cog_x-v(0), cog_y-v(2), (cog_z+v(1)),  cog_x-vv(0), cog_y-vv(2), (cog_z+vv(1)), vehicle_propeller_radius);
+    }
+  //Prop-guard Square
+  glColor3f(0.1f, 0.95f, 0.1f);
+  glLineWidth(2);
+  glBegin(GL_LINE_LOOP);
+  for(int i=0;i<4;i++)
+    {
+      Eigen::Vector3d v=local2Global(VEHICLE_SCALE(0.10783)*cos(0.7854+i*1.5708),VEHICLE_SCALE(0.10783)*sin(0.7854+i*1.5708),VEHICLE_SCALE(-0.01625), Rot);
+      Eigen::Vector3d vv=local2Global(VEHICLE_SCALE(0.10783)*cos(0.7854+(i+1)*1.5708),VEHICLE_SCALE(0.10783)*sin(0.7854+(i+1)*1.5708),VEHICLE_SCALE(-0.01625), Rot);
+			
+      glVertex3f(cog_x-v(0), cog_y-v(2), (cog_z+v(1)));
+      glVertex3f(cog_x-vv(0), cog_y-vv(2), (cog_z+vv(1)));
+    }
+  glEnd();
+  //Propellers
+  glColor3f(0.8f, 0.95f, 0.6f);
+  glBegin(GL_LINES);
+  for(int i=0;i<4;i++)
+    {
+      Eigen::Vector3d v=local2Global(VEHICLE_SCALE(0.05303)*cos(0.7854+i*1.5708)+vehicle_propeller_radius*cos(6.2832/120*vehicle_wingangle++),VEHICLE_SCALE(0.05303)*sin(0.7854+i*1.5708)+vehicle_propeller_radius*sin(6.2832/120*vehicle_wingangle++),VEHICLE_SCALE(-0.01625), Rot);
+      Eigen::Vector3d vv=local2Global(VEHICLE_SCALE(0.05303)*cos(0.7854+i*1.5708)-vehicle_propeller_radius*cos(6.2832/120*vehicle_wingangle++),VEHICLE_SCALE(0.05303)*sin(0.7854+i*1.5708)-vehicle_propeller_radius*sin(6.2832/120*vehicle_wingangle++),VEHICLE_SCALE(-0.01625), Rot);
+      glVertex3f(cog_x-v(0), cog_y-v(2),(cog_z+v(1)));
+      glVertex3f(cog_x-vv(0), cog_y-vv(2),(cog_z+vv(1)));	
+    }
+  glEnd();
+  //Body 4 cylinder
+  glColor3f(0.8f, 0.6f, 0.8f);
+  for(int i=0;i<4;i++)
+    {
+      Eigen::Vector3d v=local2Global(VEHICLE_SCALE(0.02651)*cos(0.7854+i*1.5708),VEHICLE_SCALE(0.02651)*sin(0.7854+i*1.5708),VEHICLE_SCALE(0), Rot);
+      Eigen::Vector3d vv=local2Global(VEHICLE_SCALE(0.02651)*cos(0.7854+i*1.5708),VEHICLE_SCALE(0.02651)*sin(0.7854+i*1.5708),VEHICLE_SCALE(-0.03125), Rot);
+      drawCylinder(cog_x-v(0), cog_y-v(2), (cog_z+v(1)), cog_x-vv(0), cog_y-vv(2), (cog_z+vv(1)),VEHICLE_SCALE(0.01));
+    }
+  //Top square
+  glColor3f(0.5f, 0.0f, 0.2f);
+  glBegin(GL_POLYGON);
+  for(int i=0;i<4;i++)
+    {
+      Eigen::Vector3d v=local2Global(VEHICLE_SCALE(0.02651)*cos(0.7854+i*1.5708),VEHICLE_SCALE(0.02651)*sin(0.7854+i*1.5708),VEHICLE_SCALE(-0.03125), Rot);
+      glVertex3f( cog_x-v(0), cog_y-v(2), (cog_z+v(1)));
+    }  
+  glEnd();
+  //Leg tiny legs
+  glColor3f(0.8f, 0.95f, 0.6f);
+  glBegin(GL_LINES);
+  for(int i=0;i<4;i++)
+    {
+      Eigen::Vector3d v=local2Global(VEHICLE_SCALE(0.02651)*cos(0.7854+i*1.5708),VEHICLE_SCALE(0.02651)*sin(0.7854+i*1.5708),VEHICLE_SCALE(0), Rot);
+      Eigen::Vector3d vv=local2Global(VEHICLE_SCALE(0.03276)*cos(0.7854+i*1.5708),VEHICLE_SCALE(0.03276)*sin(0.7854+i*1.5708),VEHICLE_SCALE(0), Rot);
+      glVertex3f(cog_x-v(0), cog_y-v(2), (cog_z+v(1)));
+      glVertex3f(cog_x-vv(0), cog_y-vv(2), (cog_z+vv(1)));
+    }
+  glEnd();
+  //Prop-guard innerlines
+  glColor3f(0.8f, 0.95f, 0.6f);
+  glBegin(GL_LINES);
+  for(int i=0;i<4;i++)
+    {
+      Eigen::Vector3d v=local2Global(VEHICLE_SCALE(0.05303)*cos(0.7854+i*1.5708),VEHICLE_SCALE(0.05303)*sin(0.7854+i*1.5708),VEHICLE_SCALE(-0.01625), Rot);
+      Eigen::Vector3d vv=local2Global(VEHICLE_SCALE(0.10783)*cos(0.7854+i*1.5708),VEHICLE_SCALE(0.10783)*sin(0.7854+i*1.5708),VEHICLE_SCALE(-0.01625), Rot);
+			
+      glVertex3f(cog_x-v(0), cog_y-v(2), (cog_z+v(1)));
+      glVertex3f(cog_x-vv(0), cog_y-vv(2), (cog_z+vv(1)));			
+			
+      vv=local2Global(VEHICLE_SCALE(0.08497)*cos(0.45707+i*1.5708),VEHICLE_SCALE(0.08497)*sin(0.45707+i*1.5708),VEHICLE_SCALE(-0.01625), Rot);
+			
+      glVertex3f(cog_x-v(0), cog_y-v(2), (cog_z+v(1)));
+      glVertex3f(cog_x-vv(0), cog_y-vv(2), (cog_z+vv(1)));
+			
+      vv=local2Global(VEHICLE_SCALE(0.08497)*cos(1.11373+i*1.5708),VEHICLE_SCALE(0.08497)*sin(1.11373+i*1.5708),VEHICLE_SCALE(-0.01625), Rot);
+			
+      glVertex3f(cog_x-v(0), cog_y-v(2), (cog_z+v(1)));
+      glVertex3f(cog_x-vv(0), cog_y-vv(2), (cog_z+vv(1)));
+    }
+  glEnd();
+  //Shadow
+  glColor3f(0.5f, 0.0f, 0.2f);
+  glLineWidth(2);
+  glBegin(GL_LINES);
+  glVertex3f(cog_x,cog_y,cog_z);glVertex3f(cog_x,0.0f,cog_z);
+  glEnd();
+
+
+  //direction
+  glColor3f(0.8f, 0.8f, 0.2f);
+  glLineWidth(4);
+  glBegin(GL_LINES);
+  Eigen::Vector3d v=local2Global(VEHICLE_SCALE(0),VEHICLE_SCALE(0),VEHICLE_SCALE(-0.0325), Rot);
+  Eigen::Vector3d vv=local2Global(VEHICLE_SCALE(0.01875),VEHICLE_SCALE(0),VEHICLE_SCALE(-0.0325), Rot);
+		
+  glVertex3f(cog_x-v(0), cog_y-v(2), (cog_z+v(1)));
+  glVertex3f(cog_x-vv(0), cog_y-vv(2), (cog_z+vv(1)));
+  glEnd();
 }
 
 void orientMe(float ang) {
@@ -480,6 +602,8 @@ void renderScene(void) {
     {
     case VEHICLE_QUAD :
       {
+	drawVehicleQuad(COG, R_BW);
+	/*
 	//Prop-guard circle
 	glColor3f(0.8f, 0.95f, 0.8f);
 	for(int i=0;i<4;i++)
@@ -580,6 +704,7 @@ void renderScene(void) {
 	glVertex3f(vehicle_position_x-v(0), vehicle_position_y-v(2), (vehicle_position_z+v(1)));
 	glVertex3f(vehicle_position_x-vv(0), vehicle_position_y-vv(2), (vehicle_position_z+vv(1)));
 	glEnd();
+	*/
 	break;
       }
     case VEHICLE_BI_UP:
@@ -597,7 +722,7 @@ void renderScene(void) {
 	drawRectangle3D(COG + vehicle_servo_left_offset, Vector3d(VEHICLE_SCALE(0.02), VEHICLE_SCALE(0.04), VEHICLE_SCALE(0.05)), R_BW);
 	//Servo right
 	Vector3d vehicle_servo_right_offset = offsetCenter(Vector3d(VEHICLE_SCALE(0),vehicle_bi_arm_length,VEHICLE_SCALE(0.02)), R_BW);
-	  drawRectangle3D(COG + vehicle_servo_right_offset, Vector3d(VEHICLE_SCALE(0.02), VEHICLE_SCALE(0.04), VEHICLE_SCALE(0.05)), R_BW);
+	drawRectangle3D(COG + vehicle_servo_right_offset, Vector3d(VEHICLE_SCALE(0.02), VEHICLE_SCALE(0.04), VEHICLE_SCALE(0.05)), R_BW);
 	//Rotor Left
 	glColor3f(GLCOLOR_RED3);
 	Vector3d vehicle_rotor_left_bottom = COG + offsetCenter(Vector3d(VEHICLE_SCALE(0),-vehicle_bi_arm_length,VEHICLE_SCALE(0.05)), R_BW);
@@ -672,8 +797,17 @@ void renderScene(void) {
   glEnd();
 
   //Goal Point
-  glColor3f(1.0f, 0.2f, 0.2f);
-  drawSphere(goal_position_x, goal_position_y, goal_position_z, 0.03, 20, 20);
+  switch(vehicle_goal_type){
+  case VEHICLE_BALL:{
+    glColor3f(1.0f, 0.2f, 0.2f);
+    drawSphere(goal_position_x, goal_position_y, goal_position_z, 0.03, 20, 20);
+    break;
+  }
+  case VEHICLE_QUAD:{
+    drawVehicleQuad(COG_GOAL, R_GOW);
+    break;
+  }
+  }
     
 
   FTGLPixmapFont font(FONT_FILE_PATH.c_str());
@@ -811,7 +945,9 @@ int main(int argc, char **argv)
   //Initial vehicle
   vehicle_position_x=10.0;vehicle_position_y=0.0;vehicle_direction=rand()/(double)(RAND_MAX/6.282)-3.141;
   COG << vehicle_position_x, vehicle_position_y, vehicle_position_z;
+  COG_GOAL << goal_position_x, goal_position_y, goal_position_z;
   R_BW = R_WGL * R_BW * R_WGL;
+  R_GOW = R_WGL * R_GOW * R_WGL;
   glutInit(&argc, argv);
   glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
   glutInitWindowPosition(100,100);
