@@ -20,6 +20,8 @@
 #include "eigen_conversions/eigen_msg.h"
 #include "nav_msgs/Odometry.h"
 
+#include "utility/LPfilter.h"
+
 #include "glcolor.h"
 
 #define NAV_USING_GROUND_TILE          33
@@ -44,10 +46,10 @@ struct timeval tvstart;
 struct timeval tvend;
 
 VEHICLE_TYPE vehicle_type = VEHICLE_QUAD;
-VEHICLE_TYPE vehicle_goal_type = VEHICLE_QUAD;
+VEHICLE_TYPE vehicle_goal_type = VEHICLE_BALL;
 
 // Vehicle property in meters
-const float vehicle_scale = 4.0f;
+const float vehicle_scale = 1.0f;
 const float vehicle_propeller_radius = VEHICLE_SCALE(0.03);
 const float vehicle_bi_arm_length = VEHICLE_SCALE(0.12);
 const float vehicle_bi_servo_length = VEHICLE_SCALE(0.04);
@@ -62,15 +64,16 @@ float position_record_x[20000], position_record_y[20000], position_record_z[2000
 int position_record_state[20000];
 float goal_record_x[20000], goal_record_y[20000], goal_record_z[20000];
 int goal_record_state[20000];
-float angle=-1.5775,deltaAngle = 0.0;
+float angle=-1.5775,deltaAngle = 0.0,fuyang=0;
 float x=11.0f,y=0.5f,z=0.0f;
 float lx_FrontBack=-1.0f,ly=-70.0f,lx=70.0f,lz=70.0f,lz_FrontBack=0.0f,lx_LeftRight=0.0f,lz_LeftRight=-1.0f,lx_UpDown=0.0f,ly_UpDown=0.0f,lz_UpDown=-1.0f;
 GLint snowman_display_list;
 int deltaMove_FrontBack = 0, deltaMove_LeftRight = 0, deltaMove_UpDown=0;
-bool overlook=false,fu=false,yang=false,Robot_move=false,vehicle_move=false,vehicle_land=false,vehicle_collision=false,track_clear=false;
+bool overlook=false,Robot_move=false,vehicle_move=false,vehicle_land=false,vehicle_collision=false,track_clear=false;
 int window_width=640, window_height=360;
 int move_record=0;
 int goal_move_record=0;
+LPfilter fuyangFilter(20, 0.01), deltaAngleFilter(20, 0.01);
 
 /***** Rotation matrix ******
  B : body frame
@@ -150,6 +153,14 @@ void right_angle_Callback(const geometry_msgs::Quaternion& msg)
   vehicle_bi_right_angle_msg = msg;
   tf::quaternionMsgToEigen(vehicle_bi_right_angle_msg, R_RSB);
   //R_RSB = R_RSB.conjugate();
+}
+
+double saturate(double input, double min, double max){
+  if(input < min)
+    return min;
+  if(input > max)
+    return max;
+  return input;
 }
 
 Eigen::Vector3d local2Global(float x,float y,float z, Quaterniond R_LW)
@@ -480,21 +491,12 @@ void moveMeFlat_overlook(void) {
 }
 
 void moveMeFlat_fuyang(void) {
-
-  if(lx>1)
-    if(fu){
-      glLoadIdentity();
-      gluLookAt(x - 1*lx_FrontBack*sin(0.01*lx--), y - 1*sin(0.01*ly--), z - 1*lz_FrontBack*sin(0.01*lz--), 
-		x,y,z,
-		0.0f,cos(0.01*ly),0.0f);
-    }
-  if(lx<290)
-    if(yang){
-      glLoadIdentity();
-      gluLookAt(x - 1*lx_FrontBack*sin(0.01*lx++), y - 1*sin(0.01*ly++), z - 1*lz_FrontBack*sin(0.01*lz++), 
-		x,y,z,
-		0.0f,cos(0.01*ly),0.0f);
-    }
+  lx = saturate(lx, 1, 290);
+  glLoadIdentity();
+  gluLookAt(x - 1*lx_FrontBack*sin(0.01*lx), y - 1*sin(0.01*ly), z - 1*lz_FrontBack*sin(0.01*lz), 
+	    x,y,z,
+	    0.0f,cos(0.01*ly),0.0f);
+  lx -= fuyang; ly -= fuyang; lz -= fuyang;
 }
 
 void clear_track(){
@@ -537,7 +539,7 @@ void renderScene(void) {
     gametime+=avgtime;
   gettimeofday(&tvstart,NULL);
 
-  if(fu || yang)
+  if(fuyang)
     moveMeFlat_fuyang();
   if(overlook)
     moveMeFlat_overlook();
@@ -603,108 +605,6 @@ void renderScene(void) {
     case VEHICLE_QUAD :
       {
 	drawVehicleQuad(COG, R_BW);
-	/*
-	//Prop-guard circle
-	glColor3f(0.8f, 0.95f, 0.8f);
-	for(int i=0;i<4;i++)
-	  {
-	    Eigen::Vector3d v=vehicle2Global(0.05303*cos(0.7854+i*1.5708),0.05303*sin(0.7854+i*1.5708),-0.0125);
-	    Eigen::Vector3d vv=vehicle2Global(0.05303*cos(0.7854+i*1.5708),0.05303*sin(0.7854+i*1.5708),-0.01375);
-	    drawCylinder(vehicle_position_x-v(0), vehicle_position_y-v(2), (vehicle_position_z+v(1)),  vehicle_position_x-vv(0), vehicle_position_y-vv(2), (vehicle_position_z+vv(1)), vehicle_propeller_radius);
-	  }
-	//Prop-guard Square
-	glColor3f(0.1f, 0.95f, 0.1f);
-	glLineWidth(2);
-	glBegin(GL_LINE_LOOP);
-	for(int i=0;i<4;i++)
-	  {
-	    Eigen::Vector3d v=vehicle2Global(0.10783*cos(0.7854+i*1.5708),0.10783*sin(0.7854+i*1.5708),-0.01625);
-	    Eigen::Vector3d vv=vehicle2Global(0.10783*cos(0.7854+(i+1)*1.5708),0.10783*sin(0.7854+(i+1)*1.5708),-0.01625);
-			
-	    glVertex3f(vehicle_position_x-v(0), vehicle_position_y-v(2), (vehicle_position_z+v(1)));
-	    glVertex3f(vehicle_position_x-vv(0), vehicle_position_y-vv(2), (vehicle_position_z+vv(1)));
-	  }
-	glEnd();
-	//Propellers
-	glColor3f(0.8f, 0.95f, 0.6f);
-	glBegin(GL_LINES);
-	for(int i=0;i<4;i++)
-	  {
-	    Eigen::Vector3d v=vehicle2Global(0.05303*cos(0.7854+i*1.5708)+vehicle_propeller_radius*cos(6.2832/120*vehicle_wingangle++),0.05303*sin(0.7854+i*1.5708)+vehicle_propeller_radius*sin(6.2832/120*vehicle_wingangle++),-0.01625);
-	    Eigen::Vector3d vv=vehicle2Global(0.05303*cos(0.7854+i*1.5708)-vehicle_propeller_radius*cos(6.2832/120*vehicle_wingangle++),0.05303*sin(0.7854+i*1.5708)-vehicle_propeller_radius*sin(6.2832/120*vehicle_wingangle++),-0.01625);
-	    glVertex3f(vehicle_position_x-v(0), vehicle_position_y-v(2),(vehicle_position_z+v(1)));
-	    glVertex3f(vehicle_position_x-vv(0), vehicle_position_y-vv(2),(vehicle_position_z+vv(1)));	
-	  }
-	glEnd();
-	//Body 4 cylinder
-	glColor3f(0.8f, 0.6f, 0.8f);
-	for(int i=0;i<4;i++)
-	  {
-	    Eigen::Vector3d v=vehicle2Global(0.02651*cos(0.7854+i*1.5708),0.02651*sin(0.7854+i*1.5708),0);
-	    Eigen::Vector3d vv=vehicle2Global(0.02651*cos(0.7854+i*1.5708),0.02651*sin(0.7854+i*1.5708),-0.03125);
-	    drawCylinder(vehicle_position_x-v(0), vehicle_position_y-v(2), (vehicle_position_z+v(1)), vehicle_position_x-vv(0), vehicle_position_y-vv(2), (vehicle_position_z+vv(1)),0.01);
-	  }
-	//Top square
-	glColor3f(0.5f, 0.0f, 0.2f);
-	glBegin(GL_POLYGON);
-	for(int i=0;i<4;i++)
-	  {
-	    Eigen::Vector3d v=vehicle2Global(0.02651*cos(0.7854+i*1.5708),0.02651*sin(0.7854+i*1.5708),-0.03125);
-	    glVertex3f( vehicle_position_x-v(0), vehicle_position_y-v(2), (vehicle_position_z+v(1)));
-	  }  
-	glEnd();
-	//Leg tiny legs
-	glColor3f(0.8f, 0.95f, 0.6f);
-	glBegin(GL_LINES);
-	for(int i=0;i<4;i++)
-	  {
-	    Eigen::Vector3d v=vehicle2Global(0.02651*cos(0.7854+i*1.5708),0.02651*sin(0.7854+i*1.5708),0);
-	    Eigen::Vector3d vv=vehicle2Global(0.03276*cos(0.7854+i*1.5708),0.03276*sin(0.7854+i*1.5708),0);
-	    glVertex3f(vehicle_position_x-v(0), vehicle_position_y-v(2), (vehicle_position_z+v(1)));
-	    glVertex3f(vehicle_position_x-vv(0), vehicle_position_y-vv(2), (vehicle_position_z+vv(1)));
-	  }
-	glEnd();
-	//Prop-guard innerlines
-	glColor3f(0.8f, 0.95f, 0.6f);
-	glBegin(GL_LINES);
-	for(int i=0;i<4;i++)
-	  {
-	    Eigen::Vector3d v=vehicle2Global(0.05303*cos(0.7854+i*1.5708),0.05303*sin(0.7854+i*1.5708),-0.01625);
-	    Eigen::Vector3d vv=vehicle2Global(0.10783*cos(0.7854+i*1.5708),0.10783*sin(0.7854+i*1.5708),-0.01625);
-			
-	    glVertex3f(vehicle_position_x-v(0), vehicle_position_y-v(2), (vehicle_position_z+v(1)));
-	    glVertex3f(vehicle_position_x-vv(0), vehicle_position_y-vv(2), (vehicle_position_z+vv(1)));			
-			
-	    vv=vehicle2Global(0.08497*cos(0.45707+i*1.5708),0.08497*sin(0.45707+i*1.5708),-0.01625);
-			
-	    glVertex3f(vehicle_position_x-v(0), vehicle_position_y-v(2), (vehicle_position_z+v(1)));
-	    glVertex3f(vehicle_position_x-vv(0), vehicle_position_y-vv(2), (vehicle_position_z+vv(1)));
-			
-	    vv=vehicle2Global(0.08497*cos(1.11373+i*1.5708),0.08497*sin(1.11373+i*1.5708),-0.01625);
-			
-	    glVertex3f(vehicle_position_x-v(0), vehicle_position_y-v(2), (vehicle_position_z+v(1)));
-	    glVertex3f(vehicle_position_x-vv(0), vehicle_position_y-vv(2), (vehicle_position_z+vv(1)));
-	  }
-	glEnd();
-	//Shadow
-	glColor3f(0.5f, 0.0f, 0.2f);
-	glLineWidth(2);
-	glBegin(GL_LINES);
-	glVertex3f(vehicle_position_x,vehicle_position_y,vehicle_position_z);glVertex3f(vehicle_position_x,0.0f,vehicle_position_z);
-	glEnd();
-
-
-	//direction
-	glColor3f(0.8f, 0.8f, 0.2f);
-	glLineWidth(4);
-	glBegin(GL_LINES);
-	Eigen::Vector3d v=vehicle2Global(0,0,-0.0325);
-	Eigen::Vector3d vv=vehicle2Global(0.01875,0,-0.0325);
-		
-	glVertex3f(vehicle_position_x-v(0), vehicle_position_y-v(2), (vehicle_position_z+v(1)));
-	glVertex3f(vehicle_position_x-vv(0), vehicle_position_y-vv(2), (vehicle_position_z+vv(1)));
-	glEnd();
-	*/
 	break;
       }
     case VEHICLE_BI_UP:
@@ -861,11 +761,44 @@ void renderScene(void) {
 
 }
 
+void mouseMotion(int x, int y){
+  static bool wrap = false;
+  if(!wrap) {
+    int ww = glutGet(GLUT_WINDOW_WIDTH);
+    int wh = glutGet(GLUT_WINDOW_HEIGHT);
+
+    int dx = x - ww / 2;
+    int dy = y - wh / 2;
+
+    // Do something with dx and dy here
+    //cerr<<dx<<"  "<<dy<<endl;
+    deltaAngle = deltaAngleFilter.update((dx>0?1:-1)*0.003*saturate(pow(abs(dx),2), 0, 15));
+    fuyang = fuyangFilter.update((dy>0?1:-1)*0.14*saturate(pow(abs(dy),2), 0, 15));
+    // move mouse pointer back to the center of the window
+    wrap = true;
+    glutWarpPointer(ww / 2, wh / 2);
+  } else {
+    wrap = false;
+  }
+}
+
+void mouseRelease(int button, int state, int x, int y){
+  if(state == 0){
+    glutSetCursor(GLUT_CURSOR_NONE);
+  }
+  // Capture mouse button release
+  if(state == 1){
+    fuyang = 0;
+    deltaAngle = 0;
+    glutSetCursor(GLUT_CURSOR_INHERIT);
+  }
+}
+
 void pressKey(unsigned char key, int x, int y) {
 
   switch (key) {
-  case 'f' : fu=true;break;
-  case 'r' : yang=true;break;
+  case 'f' : fuyang=0.8;break;
+  case 'r' : fuyang=-0.8;break;
   case 'o' : overlook=true;break;
   case 'u' : deltaMove_UpDown = 1;break;
   case 'j' : deltaMove_UpDown = -1;break;
@@ -886,8 +819,8 @@ void pressKey(unsigned char key, int x, int y) {
 void releaseKey(unsigned char key, int x, int y) {
 
   switch (key) {
-  case 'f' : fu=false;break;
-  case 'r' : yang=false;break;
+  case 'f' : fuyang=0;break;
+  case 'r' : fuyang=0;break;
   case 'o' : overlook=false;break;
   case 'u' : 
   case 'j' : deltaMove_UpDown = 0;break;
@@ -960,7 +893,10 @@ int main(int argc, char **argv)
   glutKeyboardFunc(pressKey);
   glutKeyboardUpFunc(releaseKey);
 
-  glutDisplayFunc(renderScene);
+  glutMotionFunc(mouseMotion);
+  glutMouseFunc(mouseRelease);
+  
+  //glutDisplayFunc(renderScene);
   glutIdleFunc(renderScene);
 	
   glutReshapeFunc(changeSize);

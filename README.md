@@ -12,6 +12,8 @@ Clone the package into your catkin workspace:
 git clone https://github.com/JJJJJJJack/glviewer.git
 cd ~/catkin_ws
 sudo apt-get install liftgl-dev
+cd ~/catkin_ws/src/glviewer/include/utility/
+git submodule init
 ```
 
 ## Fonts
