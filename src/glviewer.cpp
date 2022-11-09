@@ -46,10 +46,10 @@ struct timeval tvstart;
 struct timeval tvend;
 
 VEHICLE_TYPE vehicle_type = VEHICLE_QUAD;
-VEHICLE_TYPE vehicle_goal_type = VEHICLE_BALL;
+VEHICLE_TYPE vehicle_goal_type = VEHICLE_QUAD;
 
 // Vehicle property in meters
-const float vehicle_scale = 1.0f;
+float vehicle_scale;
 const float vehicle_propeller_radius = VEHICLE_SCALE(0.03);
 const float vehicle_bi_arm_length = VEHICLE_SCALE(0.12);
 const float vehicle_bi_servo_length = VEHICLE_SCALE(0.04);
@@ -69,6 +69,7 @@ float x=11.0f,y=0.5f,z=0.0f;
 float lx_FrontBack=-1.0f,ly=-70.0f,lx=70.0f,lz=70.0f,lz_FrontBack=0.0f,lx_LeftRight=0.0f,lz_LeftRight=-1.0f,lx_UpDown=0.0f,ly_UpDown=0.0f,lz_UpDown=-1.0f;
 GLint snowman_display_list;
 int deltaMove_FrontBack = 0, deltaMove_LeftRight = 0, deltaMove_UpDown=0;
+string QUAD_NAME;
 bool overlook=false,Robot_move=false,vehicle_move=false,vehicle_land=false,vehicle_collision=false,track_clear=false;
 int window_width=640, window_height=360;
 int move_record=0;
@@ -85,18 +86,16 @@ LPfilter fuyangFilter(20, 0.01), deltaAngleFilter(20, 0.01);
 Quaterniond R_BW(1,0,0,0), R_GOW(1,0,0,0), R_LSB, R_RSB, R_WGL(0,0,1,0);
 Vector3d COG, COG_GOAL;
 
-nav_msgs::Odometry x_sub_CurrPose;
-
-geometry_msgs::PoseStamped x_sub_GoalPose;
+geometry_msgs::PoseStamped x_sub_CurrPose, x_sub_GoalPose;
 geometry_msgs::Quaternion vehicle_bi_left_angle_msg, vehicle_bi_right_angle_msg;
 
-void x_position_Callback(const nav_msgs::Odometry& CurrPose)
+void x_position_Callback(const geometry_msgs::PoseStamped& CurrPose)
 {
   x_sub_CurrPose = CurrPose;
   
-  vehicle_position_x = 10.0f - x_sub_CurrPose.pose.pose.position.x;
-  vehicle_position_y = x_sub_CurrPose.pose.pose.position.z;
-  vehicle_position_z = -x_sub_CurrPose.pose.pose.position.y;
+  vehicle_position_x = 10.0f - x_sub_CurrPose.pose.position.x;
+  vehicle_position_y = x_sub_CurrPose.pose.position.z;
+  vehicle_position_z = x_sub_CurrPose.pose.position.y;
 
   COG << vehicle_position_x, vehicle_position_y, vehicle_position_z;
 
@@ -110,7 +109,7 @@ void x_position_Callback(const nav_msgs::Odometry& CurrPose)
     move_record = 0;
 
   tf::Quaternion orientation;
-  tf::quaternionMsgToTF(x_sub_CurrPose.pose.pose.orientation, orientation);
+  tf::quaternionMsgToTF(x_sub_CurrPose.pose.orientation, orientation);
   tf::quaternionTFToEigen(orientation, R_BW);
   // from convert to openGL frame
   R_BW = R_WGL * R_BW * R_WGL;
@@ -862,13 +861,21 @@ int main(int argc, char **argv)
 
   ros::NodeHandle x_handle;
 
-  ros::Subscriber sub_position = x_handle.subscribe("/pose", 1000, x_position_Callback);
-  ros::Subscriber sub_goal = x_handle.subscribe("/goal", 1000, x_goal_Callback);
+  ros::NodeHandle n("~");
+  n.param<std::string>("QUAD_NAME", QUAD_NAME, "jackQuad");
+  char TOPIC_NAME[100];
+  strcpy(TOPIC_NAME, "/vrpn_client_node/");
+  strcat(TOPIC_NAME, QUAD_NAME.c_str());
+  strcat(TOPIC_NAME, "/pose");
+  n.param("SCALE", vehicle_scale, 4.0f);
+
+  ros::Subscriber sub_position = x_handle.subscribe(TOPIC_NAME, 1000, x_position_Callback);
+  ros::Subscriber sub_goal = x_handle.subscribe("goal", 1000, x_goal_Callback);
 
   // for Bicopter only
   ros::Subscriber sub_servo_left  = x_handle.subscribe("/left_servo", 1000, left_angle_Callback);
   ros::Subscriber sub_servo_right = x_handle.subscribe("/right_servo", 1000, right_angle_Callback);
-
+  
   char* username;
   username = (char *)malloc(4*sizeof(char));
   cuserid(username);
